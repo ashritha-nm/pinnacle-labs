@@ -1,0 +1,74 @@
+import tkinter as tk
+from tkinter import messagebox, simpledialog
+import calendar
+import json
+from datetime import datetime
+
+# File to store reminders
+REMINDER_FILE = "reminders.json"
+
+def load_reminders():
+    """Load reminders from a file."""
+    try:
+        with open(REMINDER_FILE, "r") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_reminders():
+    """Save reminders to a file."""
+    with open(REMINDER_FILE, "w") as file:
+        json.dump(reminders, file)
+
+def show_calendar(year, month):
+    """Display the calendar for the given year and month."""
+    cal_text = calendar.month(year, month)
+    text_widget.delete("1.0", tk.END)
+    text_widget.insert(tk.END, cal_text)
+
+def add_reminder():
+    """Add a reminder for a selected date."""
+    date = simpledialog.askstring("Add Reminder", "Enter date (YYYY-MM-DD):")
+    if not date:
+        return
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        messagebox.showerror("Error", "Invalid date format.")
+        return
+    
+    reminder_text = simpledialog.askstring("Add Reminder", "Enter reminder:")
+    if not reminder_text:
+        return
+    
+    reminders[date] = reminders.get(date, []) + [reminder_text]
+    save_reminders()
+    messagebox.showinfo("Success", "Reminder added successfully!")
+
+def view_reminders():
+    """View all reminders."""
+    reminder_list = "\n".join([f"{date}: {', '.join(texts)}" for date, texts in reminders.items()])
+    if not reminder_list:
+        reminder_list = "No reminders set."
+    messagebox.showinfo("Reminders", reminder_list)
+
+# Load reminders on startup
+reminders = load_reminders()
+
+# Create the GUI
+root = tk.Tk()
+root.title("Calendar and Reminder App")
+
+year, month = datetime.today().year, datetime.today().month
+
+text_widget = tk.Text(root, height=10, width=30)
+text_widget.pack()
+
+show_calendar(year, month)
+
+tk.Button(root, text="Add Reminder", command=add_reminder).pack()
+tk.Button(root, text="View Reminders", command=view_reminders).pack()
+
+tk.Button(root, text="Exit", command=root.quit).pack()
+
+root.mainloop()
