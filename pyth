@@ -1,0 +1,57 @@
+from flask import Flask, render_template, request, redirect, url_for, session
+from flask_socketio import SocketIO, join_room, leave_room, send
+from flask_sqlalchemy import SQLAlchemy
+import uuid
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chat.db'
+db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins='*')
+
+# Database models
+class User(db.Model):
+    id = db.Column(db.String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(50), nullable=False)
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(50), db.ForeignKey('user.id'), nullable=False)
+    room = db.Column(db.String(50), nullable=False)
+    content = db.Column(db.String(500), nullable=False)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/chat', methods=['POST', 'GET'])
+def chat():
+    if request.method == 'POST':
+        username = request.form['username']
+        session['username'] = username
+        return redirect(url_for('chat_room', room='general'))
+    return render_template('chat.html')
+
+@app.route('/chat/<room>')
+def chat_room(room):
+    return render_template('chat_room.html', room=room, username=session.get('username'))
+
+@socketio.on('join')
+def handle_join(data):
+    username = data['username']
+    room = data['room']
+    join_room(room)
+    send({'msg': f'{username} has joined the room.'}, to=room)
+
+@socketio.on('message')
+def handle_message(data):
+    msg = Message(user_id=session.get('username'), room=data['room'], content=data['msg'])
+    db.session.add(msg)
+    db.session.commit()
+    send({'username': session.get('username'), 'msg': data['msg']}, to=data['room'])
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    socketio.run(app, debug=True)
